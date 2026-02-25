@@ -1,15 +1,11 @@
-GET http://localhost:7071/api/httpget HTTP/1.1
-
-###
-
-GET http://localhost:7071/api/httpget?name=World HTTP/1.1
-
-###
-
-POST http://localhost:7071/api/httppost
+POST http://localhost:7071/api/fill-template
 content-type: application/json
 
 {
-    "name": "Awesome Developer",
-    "age": 25
+    "data": {
+        "Client1FullName": "Awesome Developer",
+        "Client1Executor": "Taylor Example"
+    },
+    "scrub": true,
+    "outputName": "filled.vsdx"
 }

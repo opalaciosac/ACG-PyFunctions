@@ -91,12 +91,12 @@ py -m venv .venv
     func start
     ```
 
-1. From your HTTP test tool in a new terminal (or from your browser), call the HTTP GET endpoint: <http://localhost:7071/api/httpget>
-
-1. Test the HTTP POST trigger with a payload using your favorite secure HTTP test tool. This example uses the `curl` tool with payload data from the [`testdata.json`](./testdata.json) project file:
+1. From your HTTP test tool in a new terminal, call the `fill-template` endpoint through the path-based router:
 
     ```shell
-    curl -i http://localhost:7071/api/httppost -H "Content-Type: text/json" -d @testdata.json
+        curl -i http://localhost:7071/api/fill-template \
+            -H "Content-Type: application/json" \
+            -d "{\"data\":{\"Client1FullName\":\"Awesome Developer\",\"Client1Executor\":\"Taylor Example\"},\"scrub\":true,\"outputName\":\"filled.vsdx\"}"
     ```
 
 1. When you're done, press Ctrl+C in the terminal window to stop the `func.exe` host process.
@@ -108,49 +108,17 @@ py -m venv .venv
 1. Open the root folder in a new terminal.
 1. Run the `code .` code command to open the project in Visual Studio Code.
 1. Press **Run/Debug (F5)** to run in the debugger. Select **Debug anyway** if prompted about local emulator not running.
-1. Send GET and POST requests to the `httpget` and `httppost` endpoints respectively using your HTTP test tool (or browser for `httpget`). If you have the [RestClient](https://marketplace.visualstudio.com/items?itemName=humao.rest-client) extension installed, you can execute requests directly from the [`test.http`](test.http) project file.
+1. Send a POST request to the `fill-template` endpoint (`/api/fill-template`) using your HTTP test tool. If you have the [RestClient](https://marketplace.visualstudio.com/items?itemName=humao.rest-client) extension installed, you can execute the request directly from the [`test.http`](test.http) project file.
 
 ## Source Code
 
-The source code for both functions is in the [`function_app.py`](./function_app.py) code file. Azure Functions requires the use of the `@azure/functions` library.
+The HTTP entrypoint is in [`function_app.py`](./function_app.py). It uses a single catch-all Azure Functions route (`{*path}`) and dispatches requests with a route table keyed by `(method, path)`.
 
-This code shows an HTTP GET triggered function:  
+Current route registration:
 
-```python
-@app.route(route="httpget", methods=["GET"])
-def http_get(req: func.HttpRequest) -> func.HttpResponse:
-    name = req.params.get("name", "World")
+- `POST /fill-template` → executes the Visio template filler logic from [`pyscripts/fill_template.py`](./pyscripts/fill_template.py)
 
-    logging.info(f"Processing GET request. Name: {name}")
-
-    return func.HttpResponse(f"Hello, {name}!")
-```
-
-This code shows an HTTP POST triggered function:
-
-```python
-@app.route(route="httppost", methods=["POST"])
-def http_post(req: func.HttpRequest) -> func.HttpResponse:
-    try:
-        req_body = req.get_json()
-        name = req_body.get('name')
-        age = req_body.get('age')
-        
-        logging.info(f"Processing POST request. Name: {name}")
-
-        if name and isinstance(name, str) and age and isinstance(age, int):
-            return func.HttpResponse(f"Hello, {name}! You are {age} years old!")
-        else:
-            return func.HttpResponse(
-                "Please provide both 'name' and 'age' in the request body.",
-                status_code=400
-            )
-    except ValueError:
-        return func.HttpResponse(
-            "Invalid JSON in request body",
-            status_code=400
-        )
-```
+To add more routes (for example `/generate-diagram`), register another handler in the `ROUTES` dictionary with minimal changes.
 
 ## Deploy to Azure
 
