@@ -1,167 +1,168 @@
-<!--
----
-name: Azure Functions Python HTTP Trigger using Azure Developer CLI
-description: This repository contains an Azure Functions HTTP trigger quickstart written in Python and deployed to Azure Functions Flex Consumption using the Azure Developer CLI (azd). The sample uses managed identity and a virtual network to make sure deployment is secure by default. You can opt out of a VNet being used in the sample by setting VNET_ENABLED to false in the parameters.
-page_type: sample
-languages:
-- azdeveloper
-- python
-- bicep
-products:
-- azure
-- azure-functions
-- entra-id
-urlFragment: functions-quickstart-python-azd
----
--->
+# ACG PyFunctions – Visio Template Generator
 
-# Azure Functions Python HTTP Trigger using Azure Developer CLI
+This project is an Azure Functions (Python) HTTP API that fills a Visio template (`.vsdx`) with JSON data and returns the generated file as a binary download.
 
-This template repository contains an HTTP trigger reference sample for Azure Functions written in Python and deployed to Azure using the Azure Developer CLI (`azd`). The sample uses managed identity and a virtual network to make sure deployment is secure by default.
+It is designed to run locally with Azure Functions Core Tools and deploy with Azure Developer CLI (`azd`).
 
-This source code supports the article [Quickstart: Create and deploy functions to Azure Functions using the Azure Developer CLI](https://learn.microsoft.com/azure/azure-functions/create-first-function-azure-developer-cli?pivots=programming-language-python).
+## What this API does
+
+- Accepts a `POST` request at `/api/fill-template`.
+- Replaces bracketed tokens in the Visio template using request JSON.
+- Optionally scrubs empty visual lines after substitution.
+- Returns a generated `.vsdx` file as **binary** (not base64).
+
+## Current route map
+
+Routing is implemented in [function_app.py](function_app.py) using a catch-all route and a route table.
+
+- `POST /fill-template` → generate filled Visio file
+
+To add a new endpoint, register another handler in the `ROUTES` dictionary in [function_app.py](function_app.py).
 
 ## Prerequisites
 
-+ [Python 3.11](https://www.python.org/)
-+ [Azurite](https://learn.microsoft.com/azure/storage/common/storage-use-azurite) (for local storage emulation)
-+ [Azure Functions Core Tools](https://learn.microsoft.com/azure/azure-functions/functions-run-local?pivots=programming-language-python#install-the-azure-functions-core-tools)
-+ [Azure Developer CLI (AZD)](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd)
-+ To use Visual Studio Code to run and debug locally:
-  + [Visual Studio Code](https://code.visualstudio.com/)
-  + [Azure Functions extension](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-azurefunctions)
+- Python 3.11
+- Azure Functions Core Tools v4
+- Azurite (local storage emulator)
+- Azure Developer CLI (`azd`)
+- (Optional) Visual Studio Code + Azure Functions extension
 
-## Initialize the local project
+## Local setup
 
-You can initialize a project from this `azd` template in one of these ways:
+### 1) Create and activate a virtual environment
 
-+ Use this `azd init` command from an empty local (root) folder:
+PowerShell:
 
-    ```shell
-    azd init --template functions-quickstart-python-http-azd
-    ```
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
 
-    Supply an environment name, such as `flexquickstart` when prompted. In `azd`, the environment is used to maintain a unique deployment context for your app.
+### 2) Install dependencies
 
-+ Clone the GitHub template repository locally using the `git clone` command:
+```powershell
+pip install -r requirements.txt
+```
 
-    ```shell
-    git clone https://github.com/Azure-Samples/functions-quickstart-python-http-azd.git
-    cd functions-quickstart-python-http-azd
-    ```
+### 3) Start Azurite (separate terminal)
 
-    You can also clone the repository from your own fork in GitHub.
+```powershell
+azurite
+```
 
-## Local settings
+### 4) Start the Functions host
 
-The `local.settings.json` file is included in this template with default values for local development. This file is excluded from deployment by `.funcignore`.
+```powershell
+func start
+```
 
+## Test locally
 
-## Create a virtual environment
+You can use [test.http](test.http) or `curl`.
 
-The way that you create your virtual environment depends on your operating system.
-Open the terminal, navigate to the project folder, and run these commands:
+### Sample payload
 
-### Linux/macOS/bash
+```json
+{
+  "data": {
+    "Client1FullName": "John A. Smith",
+    "Client1ShortName": "John",
+    "Client2FullName": "Jane B. Smith",
+    "Client2ShortName": "Jane",
+    "Year": "2026"
+  },
+  "scrub": true,
+  "outputName": "estate-plan-sample.vsdx"
+}
+```
+
+### `curl` example (saves file)
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
+curl -X POST "http://localhost:7071/api/fill-template" \
+  -H "Content-Type: application/json" \
+  -d @payload.json \
+  --output result.vsdx
 ```
 
-#### Windows (Cmd)
+## Response contract
 
-```shell
-py -m venv .venv
-.venv\scripts\activate
-```
+On success:
 
-## Run your app from the terminal
+- Status: `200 OK`
+- Body: binary `.vsdx` bytes
+- Content-Type: `application/vnd.ms-visio.drawing`
+- Content-Disposition: attachment with output filename
+- Metadata headers:
+  - `X-Tokens-Filled`
+  - `X-Tokens-Zeroed`
+  - `X-Lines-Scrubbed`
 
-1. Start Azurite for local storage emulation. In a separate terminal, run:
+Common errors:
 
-    ```shell
-    azurite
-    ```
-
-1. In your project terminal, start the Functions host:
-
-    ```shell
-    pip3 install -r requirements.txt
-    func start
-    ```
-
-1. From your HTTP test tool in a new terminal, call the `fill-template` endpoint through the path-based router:
-
-    ```shell
-        curl -i http://localhost:7071/api/fill-template \
-            -H "Content-Type: application/json" \
-            -d "{\"data\":{\"Client1FullName\":\"Awesome Developer\",\"Client1Executor\":\"Taylor Example\"},\"scrub\":true,\"outputName\":\"filled.vsdx\"}"
-    ```
-
-1. When you're done, press Ctrl+C in the terminal window to stop the `func.exe` host process.
-
-1. Run `deactivate` to shut down the virtual environment.
-
-## Run your app using Visual Studio Code
-
-1. Open the root folder in a new terminal.
-1. Run the `code .` code command to open the project in Visual Studio Code.
-1. Press **Run/Debug (F5)** to run in the debugger. Select **Debug anyway** if prompted about local emulator not running.
-1. Send a POST request to the `fill-template` endpoint (`/api/fill-template`) using your HTTP test tool. If you have the [RestClient](https://marketplace.visualstudio.com/items?itemName=humao.rest-client) extension installed, you can execute the request directly from the [`test.http`](test.http) project file.
-
-## Source Code
-
-The HTTP entrypoint is in [`function_app.py`](./function_app.py). It uses a single catch-all Azure Functions route (`{*path}`) and dispatches requests with a route table keyed by `(method, path)`.
-
-Current route registration:
-
-- `POST /fill-template` → executes the Visio template filler logic from [`pyscripts/fill_template.py`](./pyscripts/fill_template.py)
-
-To add more routes (for example `/generate-diagram`), register another handler in the `ROUTES` dictionary with minimal changes.
+- `400` invalid JSON or invalid `data` shape
+- `404` route/method not registered
+- `500` template file missing or generation failure
 
 ## Deploy to Azure
 
-Run this command to provision the function app, with any required Azure resources, and deploy your code:
+From the project root:
 
-```shell
+```powershell
 azd up
 ```
 
-By default, this sample deploys with a virtual network (VNet) for enhanced security, ensuring that the function app and related resources are isolated within a private network. 
-The `VNET_ENABLED` parameter controls whether a VNet is used during deployment:
-- When `VNET_ENABLED` is `true` (default), the function app is deployed with a VNet for secure communication and resource isolation.
-- When `VNET_ENABLED` is `false`, the function app is deployed without a VNet, allowing public access to resources.
+This provisions infra and deploys the function app.
 
-This parameter replaces the previous `SKIP_VNET` parameter. If you were using `SKIP_VNET` in earlier versions, set `VNET_ENABLED` to `false` to achieve the same behavior.
+## Call the deployed endpoint
 
-To disable the VNet for this sample, set `VNET_ENABLED` to `false` before running `azd up`:
-```bash
-azd env set VNET_ENABLED false
-azd up
+This app currently uses **Function-level auth** (`AuthLevel.FUNCTION`) in [function_app.py](function_app.py), so deployed calls require a function key.
+
+### Request URL pattern
+
+```text
+https://<your-function-app>.azurewebsites.net/api/fill-template?code=<FUNCTION_KEY>
 ```
 
-You're prompted to supply these required deployment parameters:
+Or send key in header:
 
-| Parameter | Description |
-| ---- | ---- |
-| _Environment name_ | An environment that's used to maintain a unique deployment context for your app. You aren't prompted when you created the local project using `azd init`.|
-| _Azure subscription_ | Subscription in which your resources are created.|
-| _Azure location_ | Azure region in which to create the resource group that contains the new Azure resources. Only regions that currently support the Flex Consumption plan are shown.|
+```text
+x-functions-key: <FUNCTION_KEY>
+```
 
-To learn how to obtain your new function endpoints in Azure along with the required function keys, see [Invoke the function on Azure](https://learn.microsoft.com/azure/azure-functions/create-first-function-azure-developer-cli?pivots=programming-language-java#invoke-the-function-on-azure) in the companion article [Quickstart: Create and deploy functions to Azure Functions using the Azure Developer CLI](https://learn.microsoft.com/azure/azure-functions/create-first-function-azure-developer-cli?pivots=programming-language-java#invoke-the-function-on-azure).
+### Get the function key
 
-## Redeploy your code
+Azure CLI:
 
-You can run the `azd up` command as many times as you need to both provision your Azure resources and deploy code updates to your function app.
+```powershell
+az functionapp function keys list \
+  --resource-group <resource-group> \
+  --name <function-app-name> \
+  --function-name http_router
+```
 
->[!NOTE]
->Deployed code files are always overwritten by the latest deployment package.
+Portal:
 
-## Clean up resources
+1. Open Function App
+2. Go to **Functions** → `http_router`
+3. Open **Function Keys**
 
-When you're done working with your function app and related resources, you can use this command to delete the function app and its related resources from Azure and avoid incurring any further costs:
+## Notes for maintainers
 
-```shell
+- Template source path is managed in [pyscripts/fill_template.py](pyscripts/fill_template.py).
+- API generation logic delegates to `fill_template_bytes(...)`.
+- Keep responses binary for file-download clients; do not convert output to base64 unless client requirements change.
+
+## Troubleshooting
+
+- `401 Unauthorized` on Azure: missing or invalid function key.
+- `Port 7071 is unavailable`: another local host is already using that port.
+- `Template file was not found on the server`: verify template asset is included in deployment package.
+
+## Cleanup
+
+To remove provisioned Azure resources:
+
+```powershell
 azd down
 ```
